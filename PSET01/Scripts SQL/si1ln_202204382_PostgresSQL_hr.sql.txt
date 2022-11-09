@@ -1,22 +1,45 @@
-CREATE USER aluno;
+---Lembrando que o Postgres nao permite executar tudo de vez como em outras linguagens---
+--Caso fosse somente create tabelas, ou algo relacionado a uma estrutura pre definida, seria possivel---
 
-CREATE DATABASE uvv
-  WITH OWNER = aluno
+----usuario-----
+CREATE ROLE "Nelson" WITH 
+	SUPERUSER
+	CREATEDB
+	CREATEROLE
+	INHERIT
+	LOGIN
+	REPLICATION
+	BYPASSRLS
+	CONNECTION LIMIT -1;
+
+----database-----
+CREATE DATABASE "uvv"
+  WITH OWNER = Nelson
        ENCODING = 'UTF8'
        TABLESPACE = pg_default
        LC_COLLATE = 'Portuguese_Brazil.1252'
        LC_CTYPE = 'Portuguese_Brazil.1252'
        CONNECTION LIMIT = -1;
 
-CREATE SCHEMA hr
-  AUTHORIZATION aluno;
+      -----Schema-----
+CREATE SCHEMA hr AUTHORIZATION Nelson;
+      
+SET SEARCH_PATH TO hr, "$user", public;
 
+SHOW SEARCH_PATH;
+
+ALTER USER Nelson
+SET SEARCH_PATH TO hr, "$user", public;
+
+
+----inserindo tabelas-----
 
 CREATE TABLE hr.regioes (
                 id_regiao INTEGER NOT NULL,
                 nome_regiao VARCHAR(25) NOT NULL,
                 CONSTRAINT regioes_pk PRIMARY KEY (id_regiao)
 );
+COMMENT ON TABLE hr.regioes IS 'Tabela de regioes';
 COMMENT ON COLUMN hr.regioes.id_regiao IS 'id da regiao';
 COMMENT ON COLUMN hr.regioes.nome_regiao IS 'nome da regiao';
 
@@ -31,6 +54,7 @@ CREATE TABLE hr.paises (
                 id_regiao INTEGER,
                 CONSTRAINT paises_pk PRIMARY KEY (id_pais)
 );
+COMMENT ON TABLE hr.paises IS 'Tabela de paises de cada regiao';
 COMMENT ON COLUMN hr.paises.id_pais IS 'id do pais';
 COMMENT ON COLUMN hr.paises.nome_pais IS 'nome do pais';
 COMMENT ON COLUMN hr.paises.id_regiao IS 'id da regiao';
@@ -49,6 +73,7 @@ CREATE TABLE hr.localizacoes (
                 id_pais CHAR(2),
                 CONSTRAINT lc_pk PRIMARY KEY (lc_id_localizacoes)
 );
+COMMENT ON TABLE hr.localizacoes IS 'tabela de localizao de paises';
 COMMENT ON COLUMN hr.localizacoes.lc_id_localizacoes IS 'localizacoes id';
 COMMENT ON COLUMN hr.localizacoes.endereco IS 'endereco';
 COMMENT ON COLUMN hr.localizacoes.uf IS 'uf';
@@ -57,6 +82,22 @@ COMMENT ON COLUMN hr.localizacoes.cep IS 'Cpf';
 COMMENT ON COLUMN hr.localizacoes.id_pais IS 'id do pais';
 
 
+CREATE TABLE hr.departamentos (
+                id_departamento INTEGER NOT NULL,
+                nome VARCHAR(50),
+                lc_id_localizacoes INTEGER,
+                CONSTRAINT dt_pk PRIMARY KEY (id_departamento)
+);
+COMMENT ON TABLE hr.departamentos IS 'Tabela Departamento onde os empregados trabalham';
+COMMENT ON COLUMN hr.departamentos.id_departamento IS 'Id do departamento';
+COMMENT ON COLUMN hr.departamentos.nome IS 'nome do departamento';
+COMMENT ON COLUMN hr.departamentos.lc_id_localizacoes IS 'localizacoes id';
+
+
+CREATE UNIQUE INDEX departamentos_idx
+ ON hr.departamentos
+ ( nome );
+
 CREATE TABLE hr.cargos (
                 id_cargo VARCHAR(10) NOT NULL,
                 cargo VARCHAR(35) NOT NULL,
@@ -64,6 +105,7 @@ CREATE TABLE hr.cargos (
                 salario_maximo NUMERIC(8,2) NOT NULL,
                 CONSTRAINT cargos_pk PRIMARY KEY (id_cargo)
 );
+COMMENT ON TABLE hr.cargos IS 'Tabela Cargos do funcionario';
 COMMENT ON COLUMN hr.cargos.id_cargo IS 'Id do cargo';
 COMMENT ON COLUMN hr.cargos.cargo IS 'Cargos do empresario';
 COMMENT ON COLUMN hr.cargos.salario_minimo IS 'Salario minimo';
@@ -87,6 +129,7 @@ CREATE TABLE hr.Empregados  (
                 id_departamento INTEGER NOT NULL,
                 CONSTRAINT empregados__pk PRIMARY KEY (id_empregado)
 );
+COMMENT ON TABLE hr.Empregados  IS 'Tabela empregados, onde estara armazenado  todos os funcionarios';
 COMMENT ON COLUMN hr.Empregados .id_empregado IS 'Id do empregado';
 COMMENT ON COLUMN hr.Empregados .email IS 'Email do empregado';
 COMMENT ON COLUMN hr.Empregados .nome IS 'nome do empregado';
@@ -102,23 +145,6 @@ CREATE UNIQUE INDEX empregados__idx
  ON hr.Empregados 
  ( email );
 
-CREATE TABLE hr.departamentos (
-                id_departamento INTEGER NOT NULL,
-                nome VARCHAR(50),
-                id_gerente INTEGER,
-                lc_id_localizacoes INTEGER,
-                CONSTRAINT dt_pk PRIMARY KEY (id_departamento)
-);
-COMMENT ON COLUMN hr.departamentos.id_departamento IS 'Id do departamento';
-COMMENT ON COLUMN hr.departamentos.nome IS 'nome do departamento';
-COMMENT ON COLUMN hr.departamentos.id_gerente IS 'Id do empregado';
-COMMENT ON COLUMN hr.departamentos.lc_id_localizacoes IS 'localizacoes id';
-
-
-CREATE UNIQUE INDEX departamentos_idx
- ON hr.departamentos
- ( nome );
-
 CREATE TABLE hr.historico_cargos (
                 dt_inicial DATE NOT NULL,
                 id_empregado INTEGER NOT NULL,
@@ -127,6 +153,7 @@ CREATE TABLE hr.historico_cargos (
                 id_departamento INTEGER NOT NULL,
                 CONSTRAINT hc_cargos_pk PRIMARY KEY (dt_inicial, id_empregado)
 );
+COMMENT ON TABLE hr.historico_cargos IS 'Tabela do historico do cargo do empregado';
 COMMENT ON COLUMN hr.historico_cargos.dt_inicial IS 'data_inicial';
 COMMENT ON COLUMN hr.historico_cargos.id_empregado IS 'Id do empregado';
 COMMENT ON COLUMN hr.historico_cargos.dt_final IS 'data final';
@@ -151,6 +178,20 @@ NOT DEFERRABLE;
 ALTER TABLE hr.departamentos ADD CONSTRAINT localizacoes_departamentos_fk
 FOREIGN KEY (lc_id_localizacoes)
 REFERENCES hr.localizacoes (lc_id_localizacoes)
+ON DELETE NO ACTION
+ON UPDATE NO ACTION
+NOT DEFERRABLE;
+
+ALTER TABLE hr.historico_cargos ADD CONSTRAINT departamentos_historico_cargos_fk
+FOREIGN KEY (id_departamento)
+REFERENCES hr.departamentos (id_departamento)
+ON DELETE NO ACTION
+ON UPDATE NO ACTION
+NOT DEFERRABLE;
+
+ALTER TABLE hr.Empregados  ADD CONSTRAINT departamentos_empregados__fk
+FOREIGN KEY (id_departamento)
+REFERENCES hr.departamentos (id_departamento)
 ON DELETE NO ACTION
 ON UPDATE NO ACTION
 NOT DEFERRABLE;
@@ -183,23 +224,6 @@ ON DELETE NO ACTION
 ON UPDATE NO ACTION
 NOT DEFERRABLE;
 
-ALTER TABLE hr.departamentos ADD CONSTRAINT empregados__departamentos_fk
-FOREIGN KEY (id_gerente)
-REFERENCES hr.Empregados  (id_empregado)
-ON DELETE NO ACTION
-ON UPDATE NO ACTION
-NOT DEFERRABLE;
 
-ALTER TABLE hr.Empregados  ADD CONSTRAINT departamentos_empregados__fk
-FOREIGN KEY (id_departamento)
-REFERENCES hr.departamentos (id_departamento)
-ON DELETE NO ACTION
-ON UPDATE NO ACTION
-NOT DEFERRABLE;
 
-ALTER TABLE hr.historico_cargos ADD CONSTRAINT departamentos_historico_cargos_fk
-FOREIGN KEY (id_departamento)
-REFERENCES hr.departamentos (id_departamento)
-ON DELETE NO ACTION
-ON UPDATE NO ACTION
-NOT DEFERRABLE;
+
